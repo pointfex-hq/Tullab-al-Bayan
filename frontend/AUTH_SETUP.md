@@ -46,7 +46,7 @@ Live authentication uses **Supabase Auth (Google OAuth PKCE)** backed by `public
 
 ## 4. Safe Use of Supabase SQL Editor (Provisioning Staff Roles)
 
-Staff roles (`admin`, `teacher`) cannot be requested or assigned from the browser—all client `INSERT`/`UPDATE`/`DELETE` privileges on `public.user_roles` are revoked, so users cannot promote themselves. Provision staff rows strictly from the **Supabase SQL Editor** (or reviewed migrations) following these safety rules:
+Staff roles (`admin`, `teacher`) cannot be requested or assigned by regular users—all client `INSERT`/`UPDATE`/`DELETE` privileges on `public.user_roles` are revoked, so users cannot promote themselves. Teachers are provisioned by an Admin through **Teacher Management**, which uses admin-only database functions. Provision the first Admin strictly from the **Supabase SQL Editor** (or reviewed migrations) following these safety rules:
 
 1. **Verify target environment first:** Double-check the project badge in Supabase Dashboard (Staging vs. Production) before opening the SQL Editor.
 2. **Never run destructive local commands in hosted SQL Editor:** Never execute `seed.sql`, `DROP TABLE`, `TRUNCATE`, or `db reset` statements on Staging or Production, and never modify RLS policies or grants ad-hoc outside versioned files in `frontend/supabase/migrations/`.
@@ -78,7 +78,7 @@ ON CONFLICT (user_id) DO NOTHING;
 
 ### Teacher Account Provisioning
 
-Add an approved teacher using the same controlled pattern (`student_id` MUST remain `NULL` due to `chk_user_roles_role_links`):
+Preferred path: ask the teacher to sign in with Google once, then approve, edit or revoke them from **Admin → Teacher Management** (`/admin/teachers`). Those actions call server-side admin-only RPCs and write entries to the teacher access history. Use the SQL Editor below only when the admin UI is unavailable; it bypasses the audit log. The `student_id` column MUST remain `NULL` due to `chk_user_roles_role_links`:
 
 ```sql
 INSERT INTO public.user_roles (user_id, role, student_id, staff_code, full_name)

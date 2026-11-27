@@ -196,7 +196,7 @@ function ApproveTeacherDialog({ request, onCancel, onSaved }) {
       await approveTeacher(request.userId, name, staffCode)
       onSaved(`${name.trim()} was approved as a teacher.`)
     } catch (failure) {
-      setError(failure?.code === '23505' ? 'That staff code is already in use.' : failure?.message || 'Teacher access could not be approved.')
+      setError(failure?.message || 'Teacher access could not be approved.')
       setSaving(false)
     }
   }

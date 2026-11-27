@@ -1,8 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { EmptyState, LoadingState, Notice, PageHeader } from '../../components/ui.jsx'
-import { approveTeacher, listTeacherManagementAccounts, revokeTeacher } from './teacherRepository.js'
+import {
+  approveTeacher,
+  listTeacherAuditLogs,
+  listTeacherManagementAccounts,
+  revokeTeacher,
+  updateTeacher,
+} from './teacherRepository.js'
 
-function AccountList({ title, accounts, empty, action, onSelect }) {
+const auditFormat = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Dhaka', dateStyle: 'medium', timeStyle: 'short',
+})
+
+const ACTION_LABELS = {
+  approve_teacher: 'Approved as teacher',
+  revoke_teacher: 'Teacher access revoked',
+  update_teacher: 'Teacher details updated',
+}
+
+function AccountList({ title, accounts, empty, onApprove, onEdit, onRevoke }) {
   return (
     <section className="panel">
       <div className="panel-head"><h2>{title}</h2></div>
@@ -15,7 +31,14 @@ function AccountList({ title, accounts, empty, action, onSelect }) {
                 <p className="text-sm text-muted">{account.email}</p>
                 {account.staff_code && <p className="text-sm">Staff code {account.staff_code}</p>}
               </div>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => onSelect(account)}>{action}</button>
+              <div className="flex flex-wrap gap-2">
+                {onApprove && <button type="button" className="btn btn-primary btn-sm"
+                  onClick={() => onApprove(account)}>Approve as Teacher</button>}
+                {onEdit && <button type="button" className="btn btn-secondary btn-sm"
+                  onClick={() => onEdit(account)}>Edit</button>}
+                {onRevoke && <button type="button" className="btn btn-secondary btn-sm"
+                  onClick={() => onRevoke(account)}>Revoke teacher access</button>}
+              </div>
             </li>
           ))}
         </ul>
@@ -24,20 +47,23 @@ function AccountList({ title, accounts, empty, action, onSelect }) {
   )
 }
 
-function TeacherActionDialog({ account, approval, onCancel, onSaved }) {
+function TeacherDialog({ mode, account, onCancel, onSaved }) {
   const dialog = useRef(null)
   const [name, setName] = useState(account.full_name ?? '')
-  const [staffCode, setStaffCode] = useState('')
+  const [staffCode, setStaffCode] = useState(account.staff_code ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const title = approval ? 'Approve as Teacher' : 'Revoke teacher access'
+  const approval = mode === 'approve'
+  const editing = mode === 'edit'
+  const title = approval ? 'Approve as Teacher'
+    : editing ? 'Edit teacher details' : 'Revoke teacher access'
 
   useEffect(() => { dialog.current.showModal() }, [])
 
   async function submit(event) {
     event.preventDefault()
     if (saving) return
-    if (approval && !name.trim()) {
+    if ((approval || editing) && !name.trim()) {
       setError('Enter the verified name.')
       return
     }
@@ -45,8 +71,11 @@ function TeacherActionDialog({ account, approval, onCancel, onSaved }) {
     setError('')
     try {
       if (approval) await approveTeacher(account.user_id, name, staffCode)
+      else if (editing) await updateTeacher(account.user_id, name, staffCode)
       else await revokeTeacher(account.user_id)
-      onSaved(approval ? 'Teacher access approved.' : 'Teacher access revoked.')
+      const notice = approval ? 'Teacher access approved.'
+        : editing ? 'Teacher details updated.' : 'Teacher access revoked.'
+      onSaved(notice)
     } catch (failure) {
       setError(failure?.message || 'The account change could not be saved.')
       setSaving(false)
@@ -59,7 +88,7 @@ function TeacherActionDialog({ account, approval, onCancel, onSaved }) {
       <form className="grid gap-4 p-5" onSubmit={submit}>
         <h2 id="teacher-action-title" className="font-semibold">{title}</h2>
         <p className="break-words">{account.full_name || account.email}{account.full_name && account.email ? ' (' + account.email + ')' : ''}</p>
-        {approval ? <>
+        {approval || editing ? <>
           <label className="grid gap-1">Verified name
             <input className="field" required value={name} disabled={saving} onChange={event => setName(event.target.value)} />
           </label>
@@ -77,6 +106,43 @@ function TeacherActionDialog({ account, approval, onCancel, onSaved }) {
   )
 }
 
+function TeacherAudit({ revision }) {
+  const [state, setState] = useState({ rows: null, error: '' })
+  const [attempt, setAttempt] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    setState({ rows: null, error: '' })
+    listTeacherAuditLogs().then(
+      rows => { if (active) setState({ rows, error: '' }) },
+      failure => { if (active) setState({ rows: [], error: failure?.message || 'Teacher access history could not be loaded.' }) },
+    )
+    return () => { active = false }
+  }, [revision, attempt])
+
+  return (
+    <section className="panel">
+      <div className="panel-head"><h2>Teacher access history</h2></div>
+      {state.error ? <Notice tone="error" action={<button type="button" className="btn btn-secondary btn-sm"
+        onClick={() => setAttempt(value => value + 1)}>Try again</button>}>{state.error}</Notice>
+        : !state.rows ? <LoadingState>Loading teacher access history…</LoadingState>
+          : state.rows.length ? <ul className="divide-y">
+            {state.rows.map(row => (
+              <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div className="min-w-0 break-words">
+                  <p className="font-medium">{ACTION_LABELS[row.action] ?? row.action}: {row.target_name}</p>
+                  <p className="text-sm text-muted">By {row.actor_name}</p>
+                  {row.details?.staff_code && <p className="text-sm">Staff code {row.details.staff_code}</p>}
+                </div>
+                <p className="text-sm text-muted">{auditFormat.format(new Date(row.created_at))}</p>
+              </li>
+            ))}
+          </ul>
+            : <EmptyState>No teacher access changes have been recorded yet.</EmptyState>}
+    </section>
+  )
+}
+
 export default function TeacherManagement() {
   const [accounts, setAccounts] = useState(null)
   const [error, setError] = useState('')
@@ -88,7 +154,7 @@ export default function TeacherManagement() {
     let active = true
     listTeacherManagementAccounts().then(
       data => { if (active) setAccounts(data) },
-      () => { if (active) setError('Teacher accounts could not be loaded.') },
+      failure => { if (active) setError(failure?.message || 'Teacher accounts could not be loaded.') },
     )
     return () => { active = false }
   }, [revision])
@@ -105,11 +171,13 @@ export default function TeacherManagement() {
     {error ? <Notice tone="error" action={<button type="button" className="btn btn-secondary btn-sm" onClick={reload}>Try again</button>}>{error}</Notice>
       : !accounts ? <LoadingState /> : <div className="grid gap-4">
         <AccountList title="Pending Google accounts" accounts={accounts.pending} empty="No pending Google accounts."
-          action="Approve as Teacher" onSelect={account => setSelection({ account, approval: true })} />
+          onApprove={account => setSelection({ mode: 'approve', account })} />
         <AccountList title="Approved teachers" accounts={accounts.teachers} empty="No approved teachers."
-          action="Revoke teacher access" onSelect={account => setSelection({ account, approval: false })} />
+          onEdit={account => setSelection({ mode: 'edit', account })}
+          onRevoke={account => setSelection({ mode: 'revoke', account })} />
       </div>}
-    {selection && <TeacherActionDialog {...selection} onCancel={() => setSelection(null)} onSaved={notice => {
+    <div className="mt-4"><TeacherAudit revision={revision} /></div>
+    {selection && <TeacherDialog {...selection} onCancel={() => setSelection(null)} onSaved={notice => {
       setMessage(notice)
       setSelection(null)
       reload()

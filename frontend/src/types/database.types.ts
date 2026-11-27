@@ -159,6 +159,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"role_audit_logs": {
+                  Row: {
+                    "action": string,"actor_user_id": string,"created_at": string,"details": Json,"id": string,"role": string,"target_user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_user_id": string,"created_at"?: string,"details"?: Json,"id"?: string,"role": string,"target_user_id": string
+                  }
+                  Update: {
+                    "action"?: string,"actor_user_id"?: string,"created_at"?: string,"details"?: Json,"id"?: string,"role"?: string,"target_user_id"?: string
+                  }
+                  Relationships: [
+
+                  ]
                 },"user_roles": {
                   Row: {
                     "created_at": string,"full_name": string | null,"role": string,"staff_code": string | null,"student_id": string | null,"updated_at": string,"user_id": string
@@ -233,8 +247,27 @@ isOneToOne: true
               "created_at": string,"email": string,"full_name": string,"user_id": string
             }[]
                            },
+"list_teacher_accounts":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "email": string,"full_name": string | null,"staff_code": string | null,"user_id": string
+            }[]
+                           },
+"list_teacher_audit_logs":
+{ Args: { "p_limit"?: number }; Returns: {
+              "action": string,"actor_name": string,"created_at": string,"details": Json,"id": string,"target_name": string
+            }[]
+                           },
+"link_teacher_account":
+{ Args: { "p_full_name": string,"p_staff_code"?: string,"p_user_id": string }; Returns: undefined
+                           },
 "unlink_student_account":
 { Args: { "p_student_id": string }; Returns: undefined
+                           },
+"unlink_teacher_account":
+{ Args: { "p_user_id": string }; Returns: undefined
+                           },
+"update_teacher_account":
+{ Args: { "p_full_name": string,"p_staff_code"?: string,"p_user_id": string }; Returns: undefined
                            }
           }
           Enums: {
